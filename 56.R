@@ -484,11 +484,51 @@ print("Johannesburg map created")
 southern_africa_map <- create_regional_map()
 print("Southern Africa map created")
 
-# Force PDF recreation with unique names
-message("Saving with UNIQUE filenames to avoid caching issues...")
-ggsave("output/cape_town_map_NEW.pdf", cape_town_map, width = 11, height = 9, device = cairo_pdf, dpi = 300)
-ggsave("output/gauteng_map_NEW.pdf", gauteng_map, width = 11, height = 9, device = cairo_pdf, dpi = 300)
-ggsave("output/southern_africa_map_NEW.pdf", southern_africa_map, width = 14, height = 10, device = cairo_pdf, dpi = 300)
+# Create output directory if it doesn't exist
+if (!dir.exists("output")) {
+  dir.create("output")
+}
 
-message("VERIFICATION: New maps with timestamps saved with _NEW suffix.")
-message("Please check these specific new files to confirm legends are correct.")
+# Save the maps with a timestamp to avoid caching
+timestamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
+
+# Save Cape Town map
+ggsave(file.path("output", paste0("cape_town_map_", timestamp, ".pdf")), 
+       cape_town_map, 
+       width = 11, 
+       height = 9,
+       device = cairo_pdf)
+
+ggsave(file.path("output", paste0("cape_town_map_", timestamp, ".png")), 
+       cape_town_map, 
+       width = 11, 
+       height = 9,
+       dpi = 300)
+
+# Save Johannesburg map
+ggsave(file.path("output", paste0("gauteng_map_", timestamp, ".pdf")), 
+       gauteng_map, 
+       width = 11, 
+       height = 9,
+       device = cairo_pdf)
+
+ggsave(file.path("output", paste0("gauteng_map_", timestamp, ".png")), 
+       gauteng_map, 
+       width = 11, 
+       height = 9,
+       dpi = 300)
+
+# Save Southern Africa map
+ggsave(file.path("output", paste0("southern_africa_map_", timestamp, ".pdf")), 
+       southern_africa_map, 
+       width = 14, 
+       height = 10,
+       device = cairo_pdf)
+
+ggsave(file.path("output", paste0("southern_africa_map_", timestamp, ".png")), 
+       southern_africa_map, 
+       width = 14, 
+       height = 10,
+       dpi = 300)
+
+message("Maps created and saved in output directory with timestamp: ", timestamp)
