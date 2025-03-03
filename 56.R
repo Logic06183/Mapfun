@@ -73,52 +73,29 @@ tryCatch({
   stop("Could not load the file. Error: ", e$message)
 })
 
-# Modified data cleaning section to use just the four focus areas
+# Define the new color scheme
+category_colors <- c(
+  "Research" = "#0F1F2C",
+  "Finance and Programmes" = "#90876E",
+  "Engagement, Advocacy and Capacity Building" = "#1E4611",
+  "Policy" = "#CD1A1B"
+)
+
+# Modified data cleaning section
 base_data <- base_data %>%
-  # Remove rows with missing coordinates
   filter(!is.na(lon) & !is.na(lat)) %>%
-  # Create an institution_type field based on available columns
   mutate(
     institution_type = case_when(
       `Data_Providers` == 1 ~ "Data Provider",
-      `Official.Partners` == 1 ~ "Official Partner",
       TRUE ~ "Other"
     ),
-    # Instead of primary_focus, create separate columns for each focus area
-    has_policy = ifelse(Policy == 1, TRUE, FALSE),
+    # Create columns for each focus area
     has_research = ifelse(Research == 1, TRUE, FALSE),
     has_finance = ifelse(Finance_programmes == 1, TRUE, FALSE),
     has_engagement = ifelse(`Engagement..Advocacy..and.Capacity.Building` == 1, TRUE, FALSE),
-    # Count number of focus areas (for point size)
-    focus_areas = rowSums(across(c(Policy, Research, `Engagement..Advocacy..and.Capacity.Building`, Finance_programmes), ~ifelse(is.na(.), 0, .)))
-  )
-
-# Convert to SF object for mapping
-message("Converting to spatial data...")
-base_sf <- st_as_sf(base_data, coords = c("lon", "lat"), crs = 4326)
-
-# Add this right after loading the sf package
-# Turn off s2 geometry for less strict operations
-sf_use_s2(FALSE)
-
-# Modified data cleaning section to use just the four focus areas
-base_data <- base_data %>%
-  # Remove rows with missing coordinates
-  filter(!is.na(lon) & !is.na(lat)) %>%
-  # Create an institution_type field based on available columns
-  mutate(
-    institution_type = case_when(
-      `Data_Providers` == 1 ~ "Data Provider",
-      `Official.Partners` == 1 ~ "Official Partner",
-      TRUE ~ "Other"
-    ),
-    # Instead of primary_focus, create separate columns for each focus area
     has_policy = ifelse(Policy == 1, TRUE, FALSE),
-    has_research = ifelse(Research == 1, TRUE, FALSE),
-    has_finance = ifelse(Finance_programmes == 1, TRUE, FALSE),
-    has_engagement = ifelse(`Engagement..Advocacy..and.Capacity.Building` == 1, TRUE, FALSE),
-    # Count number of focus areas (for point size)
-    focus_areas = rowSums(across(c(Policy, Research, `Engagement..Advocacy..and.Capacity.Building`, Finance_programmes), ~ifelse(is.na(.), 0, .)))
+    # Count focus areas
+    focus_areas = rowSums(across(c(has_research, has_finance, has_engagement, has_policy)))
   )
 
 # Convert to SF object for mapping
@@ -343,192 +320,128 @@ create_regional_map <- function() {
   message("Creating Southern Africa regional map...")
   
   # Define wider bounding box for Southern Africa
-  xmin <- 15  # Further west
-  xmax <- 35  # Further east
-  ymin <- -35 # Further south
-  ymax <- -10 # Further north - EXPANDED to include more of East Africa
+  xmin <- -25  # Further west to accommodate new layout
+  xmax <- 50   # Further east
+  ymin <- -35  # South enough to include Cape Town
+  ymax <- 5    # North enough to include relevant countries
   
-  # Get base layers
-  countries <- ne_countries(scale = "medium", returnclass = "sf")
+  # Get base maps
+  world <- ne_countries(scale = "medium", returnclass = "sf")
   
-  # IMPROVED FILTERING - with explicit debug output
-  southern_africa_sf <- base_sf[base_sf$lat >= ymin & base_sf$lat <= ymax & 
-                              base_sf$lon >= xmin & base_sf$lon <= xmax, ]
-  
-  message(paste("Found", nrow(southern_africa_sf), "institutions in Southern Africa region"))
-  print(table(southern_africa_sf$City))  # Print cities for debugging
-  
-  # Print coordinates for debugging
-  message("Coordinates of first few institutions:")
-  if(nrow(southern_africa_sf) > 0) {
-    coords <- st_coordinates(southern_africa_sf[1:min(5, nrow(southern_africa_sf)),])
-    print(coords)
-  }
-  
-  # Create a combined dataset with focus areas as explicit factors
-  all_points <- data.frame()
-  
-  if(nrow(southern_africa_sf) > 0) {
-    # For each focus area, create a subset and tag it - CAREFUL HANDLING
-    policy_points <- southern_africa_sf[southern_africa_sf$has_policy, ]
-    if(nrow(policy_points) > 0) {
-      policy_points$focus_area <- "Policy"
-      all_points <- rbind(all_points, st_set_geometry(policy_points, st_geometry(policy_points)))
-    }
-    
-    research_points <- southern_africa_sf[southern_africa_sf$has_research, ]
-    if(nrow(research_points) > 0) {
-      research_points$focus_area <- "Research"
-      all_points <- rbind(all_points, st_set_geometry(research_points, st_geometry(research_points)))
-    }
-    
-    finance_points <- southern_africa_sf[southern_africa_sf$has_finance, ]
-    if(nrow(finance_points) > 0) {
-      finance_points$focus_area <- "Finance and Programmes"
-      all_points <- rbind(all_points, st_set_geometry(finance_points, st_geometry(finance_points)))
-    }
-    
-    engagement_points <- southern_africa_sf[southern_africa_sf$has_engagement, ]
-    if(nrow(engagement_points) > 0) {
-      engagement_points$focus_area <- "Engagement, Advocacy and Capacity Building" 
-      all_points <- rbind(all_points, st_set_geometry(engagement_points, st_geometry(engagement_points)))
-    }
-    
-    # Set as factor if points exist
-    if(nrow(all_points) > 0) {
-      all_points$focus_area <- factor(all_points$focus_area)
-      message(paste("Created", nrow(all_points), "total points with focus areas"))
-    }
-  }
-  
-  # Create the map with timestamp to verify it's new
+  # Create the main plot
   p <- ggplot() +
-    theme(panel.background = element_rect(fill = "aliceblue")) +
-    geom_sf(data = countries, fill = "antiquewhite1", color = "gray80", size = 0.2)
-  
-  # Add the institution points with explicit aesthetic mapping
-  if(nrow(all_points) > 0) {
-    p <- p +
-      geom_sf(data = all_points, 
-              aes(color = focus_area, shape = institution_type),
-              size = 3,
-              alpha = 0.9)
-  }
-  
-  # Add institution labels with explicit control
-  if(nrow(southern_africa_sf) > 0) {
-    # Extract coordinates for labeling
-    coords <- st_coordinates(southern_africa_sf)
-    
-    # Create a dataframe for labels with institution names and coordinates
-    institution_labels <- data.frame(
-      Institution = southern_africa_sf$Institution,
-      X = coords[, 1],
-      Y = coords[, 2],
-      stringsAsFactors = FALSE
+    geom_sf(data = world, fill = "white", color = "gray80") +
+    theme_minimal() +
+    theme(
+      plot.background = element_rect(fill = "white", color = NA),
+      panel.grid.major = element_line(color = "gray90", size = 0.2),
+      plot.margin = margin(10, 30, 10, 10, "mm")
     )
-    
-    # Ensure no duplicate labels (merge institutions at same location)
-    institution_labels <- institution_labels %>%
-      group_by(X, Y) %>%
-      summarize(Institution = first(Institution), .groups = "drop")
-    
-    # Print label info for debugging
-    print(paste("Found", nrow(institution_labels), "institutions to label"))
-    
-    # Add labels with improved visibility
-    p <- p + 
-      ggrepel::geom_text_repel(
-        data = institution_labels,
-        aes(x = X, y = Y, label = Institution),
-        size = 3,
-        fontface = "plain",
-        color = "black",
-        box.padding = 0.5,
-        point.padding = 0.3,
-        force = 8,
-        max.overlaps = Inf,
-        bg.color = "white",
-        bg.r = 0.15,
-        min.segment.length = 0,
-        segment.size = 0.3,
-        seed = 42
-      )
-  }
   
-  # Add major city labels - use explicit dataframe
-  major_cities <- data.frame(
-    city = c("Cape Town", "Johannesburg", "Pretoria", "Durban", "Maputo", 
-             "Harare", "Gaborone", "Lusaka", "Windhoek", "Bloemfontein", 
-             "Port Elizabeth", "Bulawayo", "Nairobi", "Dar es Salaam"),
-    latitude = c(-33.92, -26.20, -25.75, -29.85, -25.97, 
-                -17.83, -24.65, -15.42, -22.56, -29.12, 
-                -33.96, -20.15, -1.29, -6.82),
-    longitude = c(18.42, 28.05, 28.19, 31.03, 32.57, 
-                 31.05, 25.91, 28.28, 17.08, 26.21, 
-                 25.62, 28.58, 36.82, 39.27),
-    stringsAsFactors = FALSE
-  )
-  
-  # Add city labels to map
+  # Add points with different shapes for data providers and others
   p <- p + 
-    ggrepel::geom_text_repel(
-      data = major_cities,
-      aes(x = longitude, y = latitude, label = city),
-      size = 4,  # Larger city labels
-      fontface = "bold",
-      color = "navy",
+    geom_sf(data = base_sf %>% filter(institution_type == "Data Provider"),
+            aes(size = focus_areas), 
+            shape = 24,  # Triangle
+            fill = "white", 
+            color = "black", 
+            stroke = 0.5) +
+    geom_sf(data = base_sf %>% filter(institution_type != "Data Provider"),
+            aes(size = focus_areas), 
+            shape = 22,  # Square
+            fill = "white", 
+            color = "black", 
+            stroke = 0.5)
+  
+  # Add category-specific points
+  for (category in names(category_colors)) {
+    category_data <- switch(category,
+      "Research" = filter(base_sf, has_research),
+      "Finance and Programmes" = filter(base_sf, has_finance),
+      "Engagement, Advocacy and Capacity Building" = filter(base_sf, has_engagement),
+      "Policy" = filter(base_sf, has_policy)
+    )
+    
+    p <- p + 
+      geom_sf(data = category_data,
+              aes(size = focus_areas),
+              shape = ifelse(category_data$institution_type == "Data Provider", 24, 22),
+              fill = category_colors[category],
+              color = "black",
+              stroke = 0.5,
+              alpha = 0.8)
+  }
+  
+  # Add labels with repel
+  p <- p + 
+    geom_text_repel(
+      data = base_sf,
+      aes(label = Institution, geometry = geometry),
+      stat = "sf_coordinates",
+      size = 2.5,
+      force = 1,
+      max.overlaps = 20,
       box.padding = 0.5,
-      point.padding = 0.3,
-      bg.color = "white",
-      bg.r = 0.1,
-      min.segment.length = 0,
-      seed = 23
+      segment.color = "gray50"
     )
   
-  # Add explicit scales and guides
+  # Customize the legend
   p <- p +
-    scale_color_manual(
-      name = "Focus Areas",
-      values = c(
-        "Research" = "#0F1F2C",
-        "Finance and Programmes" = "#90876E",
-        "Engagement, Advocacy and Capacity Building" = "#1E4611",
-        "Policy" = "#CD1A1B"
-      )
-    ) +
-    scale_shape_manual(
-      name = "Institution Type",
-      values = c("Data Provider" = 18, "Official Partner" = 16, "Other" = 15)
+    scale_size_continuous(
+      name = "Number of Focus Areas",
+      range = c(2, 6),
+      breaks = 1:4
     ) +
     guides(
-      color = guide_legend(order = 1, override.aes = list(size = 4)),
-      shape = guide_legend(order = 2)
+      size = guide_legend(override.aes = list(shape = 22, fill = "gray50")),
+      shape = guide_legend(title = "Institution Type")
     )
   
-  # Add timestamp
-  timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
-  p <- p + ggtitle(paste("Southern Africa -", timestamp))
+  # Add the European inset map
+  europe_bbox <- c(-10, 35, 30, 60)
+  europe_data <- st_crop(base_sf, st_bbox(c(xmin = europe_bbox[1], ymin = europe_bbox[2],
+                                           xmax = europe_bbox[3], ymax = europe_bbox[4])))
   
-  # Enforce the wider view
-  p <- p + 
-    coord_sf(
-      xlim = c(xmin, xmax),
-      ylim = c(ymin, ymax),
-      expand = FALSE
+  europe_map <- ggplot() +
+    geom_sf(data = world, fill = "white", color = "gray80") +
+    geom_sf(data = europe_data,
+            aes(size = focus_areas),
+            shape = ifelse(europe_data$institution_type == "Data Provider", 24, 22),
+            fill = "white",
+            color = "black",
+            stroke = 0.5) +
+    coord_sf(xlim = c(europe_bbox[1], europe_bbox[3]),
+            ylim = c(europe_bbox[2], europe_bbox[4])) +
+    theme_minimal() +
+    theme(
+      plot.background = element_rect(fill = "white", color = "gray50"),
+      panel.grid.major = element_line(color = "gray90", size = 0.2),
+      axis.text = element_text(size = 6),
+      plot.margin = margin(5, 5, 5, 5, "mm")
+    )
+  
+  # Add the inset map
+  p <- p +
+    annotation_custom(
+      grob = ggplotGrob(europe_map),
+      xmin = 20,  # Adjust these coordinates to position the inset
+      xmax = 45,
+      ymin = -20,
+      ymax = -5
     ) +
-    # Add scale bar and north arrow
-    ggspatial::annotation_scale(
-      location = "br",
-      width_hint = 0.3,
-      style = "ticks"
-    ) +
-    ggspatial::annotation_north_arrow(
-      location = "tr",
-      which_north = "true",
-      style = north_arrow_minimal(),
-      height = unit(1, "cm"),
-      width = unit(1, "cm")
+    coord_sf(xlim = c(xmin, xmax),
+            ylim = c(ymin, ymax))
+  
+  # Add title and legend
+  p <- p +
+    labs(
+      title = "Institution Network Map",
+      subtitle = "Southern Africa and European Partners",
+      caption = paste("Categories:",
+                     "\nResearch (#0F1F2C)",
+                     "\nFinance and Programmes (#90876E)",
+                     "\nEngagement, Advocacy and Capacity Building (#1E4611)",
+                     "\nPolicy (#CD1A1B)")
     )
   
   return(p)
