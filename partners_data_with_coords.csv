@@ -1,0 +1,79 @@
+Institution,City,Country,CHAMNHA,HEAT,ENBEL,GHAP,HAPI,BioHEAT,HIGH_Horizons,Funder,lon,lat
+University of Botswana,Gaborone,Botswana,0,0,1,1,0,0,0,0,25.9088474,-24.6581357
+Higher Institute of Public Health,Ouagadougou,Burkina Faso,0,1,0,0,0,0,0,0,-1.5270944,12.3681873
+Institut de Recherche en Sciences de la Santé,Ouagadougou,Burkina Faso,1,0,0,1,0,0,0,0,-1.5270944,12.3681873
+Institute of Public Health,Bujumbura,Burundi,0,1,0,0,0,0,0,0,29.3675028,-3.3638125
+University of Yaoundé,Yaoundé,Cameroon,0,1,0,0,0,0,0,0,11.5213344,3.8689867
+International Health Support Centre,N'Djamena,Chad,0,1,0,0,0,0,0,0,15.0502758,12.1191543
+Centre Suisse de Recherches Scientifiques,Abidjan,Côte d'Ivoire,0,1,0,0,0,0,0,0,-4.016107,5.320357
+Felix Houphouët Boigny University,Abidjan,Côte d'Ivoire,0,1,0,0,0,0,0,0,-4.016107,5.320357
+Nangui Abrogoua University,Abidjan,Côte d'Ivoire,0,1,0,0,0,0,0,0,-4.016107,5.320357
+University Peleforo Gon Coulibaly,Korhogo,Côte d'Ivoire,0,1,0,1,0,0,0,0,-5.6316293,9.4580698
+KEMRI-Wellcome Trust,Kilifi,Kenya,1,0,0,0,0,0,0,0,39.67507159193717,-3.15073925
+Aga Khan University,Nairobi,Kenya,1,0,1,1,0,0,1,0,36.82884201813725,-1.30261485
+Institute of Public Health,Nouakchott,Mauritania,0,1,0,0,0,0,0,0,-15.9780071,18.0792379
+Federal University of Technology,Akure,Nigeria,0,1,0,0,0,0,0,0,5.1932647,7.2525595
+Medical School of Rwanda,Kigali,Rwanda,0,1,0,0,0,0,0,0,30.1296751,-1.8859597
+Cheikh Anta Diop University,Dakar,Senegal,0,1,0,0,0,0,0,0,-17.447938,14.693425
+IRESSEF,Dakar,Senegal,0,1,0,0,0,0,0,0,-17.447938,14.693425
+Ziguinchor University,Ziguinchor,Senegal,0,1,0,0,0,0,0,0,-16.2724609,12.5634929
+Climate Systems Analysis Group,Cape Town,South Africa,0,1,0,1,0,0,0,0,18.4172197,-33.9288301
+Climate-Health Africa Network for Collaboration and Engagement,Cape Town,South Africa,0,0,0,1,0,0,0,0,18.4172197,-33.9288301
+University of Cape Town/The Health Foundation,Cape Town,South Africa,0,0,0,1,0,0,0,0,18.4172197,-33.9288301
+"Empilweni clinic, University of the Witwatersrand",Johannesburg,South Africa,0,0,0,0,0,1,0,0,28.049722,-26.205
+IBM Research Africa,Johannesburg,South Africa,0,1,0,1,0,1,0,0,28.049722,-26.205
+Quantum Health,Johannesburg,South Africa,0,0,0,1,0,0,0,0,28.049722,-26.205
+Section 27,Johannesburg,South Africa,0,0,0,1,0,0,0,0,28.049722,-26.205
+Wits Health Consortium,Johannesburg,South Africa,1,1,1,1,1,1,1,0,28.049722,-26.205
+South African Medical Research Council,Pretoria,South Africa,1,0,0,1,0,0,0,0,28.1879101,-25.7459277
+University of Pretoria,Pretoria,South Africa,0,1,0,1,0,0,0,0,28.1879101,-25.7459277
+Stellenbosch University,Stellenbosch,South Africa,0,0,0,0,0,1,0,0,18.869167,-33.934444
+Muhimbili University,Dar es Salaam,Tanzania,0,0,0,0,0,0,0,0,39.2803583,-6.8160837
+University of Lome,Lome,Togo,0,1,0,0,0,0,0,0,1.215829,6.130419
+Makerere University,Kampala,Uganda,0,1,0,0,0,0,0,0,32.5813539,0.3177137
+Midlands State University,Gweru,Zimbabwe,0,1,0,0,0,0,0,0,29.8205953,-19.4616316
+CeSHHAR,Harare,Zimbabwe,1,1,0,1,1,0,1,0,31.0601584,-17.8567035
+Sydney Brenner Institute for Molecular Bioscience,Johannesburg,South Africa,0,0,0,0,0,1,0,0,28.049722,-26.205
+Rahima Moosa Mother & Child Hospital,Johannesburg,South Africa,0,0,0,0,0,1,0,0,28.049722,-26.205
+"Centre for Infectious Disease Epidemiology and Research, University of Cape Town",Cape Town,South Africa,0,0,0,1,0,0,0,0,18.4172197,-33.9288301
+"Division of Human Genetics, University of the Witwatersrand",Johannesburg,South Africa,0,0,0,0,0,1,0,0,28.049722,-26.205
+University of Southampton,Southampton,United Kingdom,0,0,0,0,0,1,0,0,-1.404189,50.9025349
+Trinity College Dublin,Dublin,Ireland,0,0,0,1,0,0,0,0,-6.2605593,53.3493795
+University of Leeds,Leeds,United Kingdom,0,0,0,1,0,0,0,0,-1.5437941,53.7974185
+"University College London, Lancet Countdown",London,United Kingdom,0,0,0,1,0,0,0,0,-0.1440550845276872,51.4893335
+"University of Jena, Department of Obstetric Medicine",Jena,Germany,0,0,0,1,0,0,0,0,11.5879359,50.9281717
+Human Technopole,Milan,Italy,0,0,0,1,0,0,0,0,9.1896346,45.4641943
+Karolinska Institute,Stockholm,Sweden,1,0,0,1,0,0,1,0,18.0710935,59.3251172
+Friedrich Schiller Universität,Jena,Germany,0,0,0,1,0,0,0,0,11.5879359,50.9281717
+World Health Organization,Geneva,Switzerland,0,0,0,1,0,0,1,0,6.1466014,46.2017559
+World Meteorological Organization,Geneva,Switzerland,0,0,0,1,0,0,0,0,6.1466014,46.2017559
+Western Cape Provincial Health,Cape Town,South Africa,0,0,0,1,0,0,0,0,18.4172197,-33.9288301
+Met Office,Exeter,United Kingdom,0,0,0,1,0,0,0,0,-3.5269209,50.7256138
+European Association of Perinatal Medicine,Paris,France,0,0,0,1,0,0,0,0,2.3483915,48.8534951
+London School of Hygiene and Tropical Medicine,London,United Kingdom,1,0,1,0,0,0,1,0,-0.1440550845276872,51.4893335
+University of Washington,Seattle,United States,1,1,0,0,0,0,0,0,-122.330062,47.6038321
+University of Oslo,Oslo,Norway,1,0,0,0,0,0,0,0,10.7389701,59.9133301
+University of Michigan,Ann Arbor,United States,0,1,0,0,0,0,0,0,-83.7484616,42.2813722
+Lunds University,Lund,Sweden,0,0,1,0,0,0,1,0,13.1929449,55.7029296
+Denmark Technical University,Copenhagen,Denmark,0,0,0,0,0,0,1,0,12.5700724,55.6867243
+University of Graz,Graz,Austria,0,0,1,0,0,0,1,0,15.4382786,47.0708678
+Azienda Sanitaria Locale Roma,Rome,Italy,0,0,1,0,0,0,1,0,12.4829321,41.8933203
+Umea University,Umea,Sweden,0,0,1,0,0,0,0,0,20.2630745,63.8256568
+Tartu Ulikool,Tartu,Estonia,0,0,1,0,0,0,0,0,26.72245,58.3801207
+Folkehelseinstituttet,Oslo,Norway,0,0,1,0,0,0,0,0,10.7389701,59.9133301
+Center for International Climate Research,Oslo,Norway,0,0,1,0,0,0,0,0,10.7389701,59.9133301
+Royal College of Surgeons in Ireland,Dublin,Ireland,0,0,1,0,0,0,0,0,-6.2605593,53.3493795
+Health and Environment Alliance,Brussels,Belgium,0,0,1,0,0,0,0,0,4.351697,50.8465573
+International Red Cross Red Crescent Centre on Climate Change and Disaster Preparedness,The Hague,Netherlands,0,0,1,0,0,0,0,0,4.269680220536452,52.07494555
+University Paul Sabatier Toulouse,Toulouse,France,0,0,1,0,0,0,0,0,1.4442469,43.6044622
+Goeteborgs University,Gothenburg,Sweden,0,0,1,0,0,0,0,0,11.9670171,57.7072326
+Ilmatieteen Laitos,Helsinki,Finland,0,0,1,0,0,0,0,0,24.9427473,60.1674881
+US National Institutes of Health,Bethesda,United States,0,0,0,1,0,0,0,1,-77.12335871396549,38.98127255
+European Union,Brussels,Belgium,0,0,0,0,0,0,0,1,4.351697,50.8465573
+UK Research and Innovation,Swindon,United Kingdom,1,0,0,0,0,0,0,1,-1.7854322,51.5615327
+Research Council of Norway,Oslo,Norway,1,0,0,0,0,0,0,1,10.7389701,59.9133301
+Forte,Stockholm,Sweden,1,0,0,0,0,0,0,1,18.0710935,59.3251172
+Green Climate Fund,Incheon,South Korea,0,0,0,0,0,0,0,1,126.7052,37.456
+Adaptation Fund,Washington DC,United States,0,0,0,0,0,0,0,1,-77.0365427,38.8950368
+Ghent University,Ghent,Belgium,0,0,0,0,0,0,1,0,3.7174243,51.0543422
+University of Thessaly,Volos,Greece,0,0,0,0,0,0,1,0,22.9444191,39.3621095
