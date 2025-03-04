@@ -73,416 +73,716 @@ tryCatch({
   stop("Could not load the file. Error: ", e$message)
 })
 
-# Define the new color scheme
-category_colors <- c(
-  "Research" = "#0F1F2C",
-  "Finance and Programmes" = "#90876E",
-  "Engagement, Advocacy and Capacity Building" = "#1E4611",
-  "Policy" = "#CD1A1B"
-)
+# After reading the CSV file, add this diagnostic code to understand the data structure
+message("Column names in the CSV file:")
+message(paste(colnames(base_data), collapse = ", "))
 
-# Modified data cleaning section
-base_data <- base_data %>%
-  filter(!is.na(lon) & !is.na(lat)) %>%
-  mutate(
-    institution_type = case_when(
-      `Data_Providers` == 1 ~ "Data Provider",
-      TRUE ~ "Other"
-    ),
-    # Create columns for each focus area
-    has_research = ifelse(Research == 1, TRUE, FALSE),
-    has_finance = ifelse(Finance_programmes == 1, TRUE, FALSE),
-    has_engagement = ifelse(`Engagement..Advocacy..and.Capacity.Building` == 1, TRUE, FALSE),
-    has_policy = ifelse(Policy == 1, TRUE, FALSE),
-    # Count focus areas
-    focus_areas = rowSums(across(c(has_research, has_finance, has_engagement, has_policy)))
+# Print a sample of the data to understand the category columns
+message("Sample of category columns (first 5 rows):")
+print(head(base_data[, c("Institution", "Research", "Policy", "Engagement..Advocacy..and.Capacity.Building", "Finance_programmes")], 5))
+
+# Count institutions by category to understand distribution
+message("Category distribution in the data:")
+message("Research: ", sum(base_data$Research == 1, na.rm = TRUE))
+message("Policy: ", sum(base_data$Policy == 1, na.rm = TRUE))
+message("Engagement: ", sum(base_data$Engagement..Advocacy..and.Capacity.Building == 1, na.rm = TRUE))
+message("Finance: ", sum(base_data$Finance_programmes == 1, na.rm = TRUE))
+
+# 1. DEFINE THE EXACT COLORS - these are used throughout the code
+RESEARCH_COLOR <- "#0F1F2C"       # Dark blue for Research
+FINANCE_COLOR <- "#90876E"        # Tan for Finance and Programmes
+ENGAGEMENT_COLOR <- "#1E4611"     # Green for Engagement
+POLICY_COLOR <- "#CD1A1B"         # Red for Policy
+
+# Add this before the map creation functions
+# Define shape values for consistent use throughout the code
+shape_values <- c("Data Provider" = 24, "Official Partner" = 21, "Other" = 21)
+
+# 2. Create a consistent manual legend function for all maps
+create_manual_legend <- function() {
+  # Create the legend as a grob
+  legend_grob <- grid::grobTree(
+    # Background rectangle with border
+    grid::rectGrob(width = 0.95, height = 0.95, 
+                  gp = grid::gpar(fill = "white", col = "#D0D0D0", lwd = 1)),
+    
+    # Title
+    grid::textGrob("Primary Focus Area", x = 0.1, y = 0.95, just = "left",
+                  gp = grid::gpar(fontsize = 11, fontface = "bold", fontfamily = "serif")),
+    
+    # Research (dark blue) - CIRCLE instead of square
+    grid::circleGrob(x = 0.15, y = 0.8, r = 0.035,
+                    gp = grid::gpar(fill = RESEARCH_COLOR, col = "black", lwd = 0.5)),
+    grid::textGrob("Research", x = 0.25, y = 0.8, just = "left",
+                  gp = grid::gpar(fontsize = 10, fontfamily = "serif")),
+    
+    # Finance (tan) - CIRCLE instead of square
+    grid::circleGrob(x = 0.15, y = 0.7, r = 0.035,
+                    gp = grid::gpar(fill = FINANCE_COLOR, col = "black", lwd = 0.5)),
+    grid::textGrob("Finance and Programmes", x = 0.25, y = 0.7, just = "left",
+                  gp = grid::gpar(fontsize = 10, fontfamily = "serif")),
+    
+    # Engagement (green) - CIRCLE instead of square
+    grid::circleGrob(x = 0.15, y = 0.6, r = 0.035,
+                    gp = grid::gpar(fill = ENGAGEMENT_COLOR, col = "black", lwd = 0.5)),
+    grid::textGrob("Engagement, Advocacy and Capacity Building", x = 0.25, y = 0.6, just = "left",
+                  gp = grid::gpar(fontsize = 10, fontfamily = "serif")),
+    
+    # Policy (red) - CIRCLE instead of square
+    grid::circleGrob(x = 0.15, y = 0.5, r = 0.035,
+                    gp = grid::gpar(fill = POLICY_COLOR, col = "black", lwd = 0.5)),
+    grid::textGrob("Policy", x = 0.25, y = 0.5, just = "left",
+                  gp = grid::gpar(fontsize = 10, fontfamily = "serif")),
+    
+    # Separator line
+    grid::linesGrob(x = grid::unit(c(0.05, 0.95), "npc"), 
+                   y = grid::unit(c(0.43, 0.43), "npc"),
+                   gp = grid::gpar(col = "#D0D0D0", lwd = 1)),
+    
+    # Institution Type section
+    grid::textGrob("Institution Type", x = 0.1, y = 0.37, just = "left",
+                  gp = grid::gpar(fontsize = 11, fontface = "bold", fontfamily = "serif")),
+    
+    # Data Provider (triangle)
+    grid::polygonGrob(x = c(0.15, 0.12, 0.18), y = c(0.27, 0.20, 0.20),
+                     gp = grid::gpar(fill = "black", col = "black")),
+    grid::textGrob("Data Provider", x = 0.25, y = 0.23, just = "left",
+                  gp = grid::gpar(fontsize = 10, fontfamily = "serif")),
+    
+    # Official Partner & Other (now using circle instead of square)
+    grid::circleGrob(x = 0.15, y = 0.13, r = 0.035,
+                    gp = grid::gpar(fill = "black", col = "black", lwd = 0.5)),
+    grid::textGrob("Official Partner / Other", x = 0.25, y = 0.13, just = "left",
+                  gp = grid::gpar(fontsize = 10, fontfamily = "serif"))
   )
-
-# Convert to SF object for mapping
-message("Converting to spatial data...")
-base_sf <- st_as_sf(base_data, coords = c("lon", "lat"), crs = 4326)
-
-# Add this right after loading the sf package
-# Turn off s2 geometry for less strict operations
-sf_use_s2(FALSE)
-
-# First, let's add a function to load boundaries from the boundary folder
-load_boundaries <- function() {
-  boundary_path <- "boundary"  # Path to your boundary folder
   
-  # Try to find province boundaries
-  province_files <- list.files(boundary_path, pattern = "province|admin1", full.names = TRUE)
-  ward_files <- list.files(boundary_path, pattern = "ward|admin4", full.names = TRUE)
-  
-  boundaries <- list()
-  
-  if (length(province_files) > 0) {
-    message("Found province boundary file: ", province_files[1])
-    boundaries$provinces <- st_read(province_files[1])
-  }
-  
-  if (length(ward_files) > 0) {
-    message("Found ward boundary file: ", ward_files[1])
-    boundaries$wards <- st_read(ward_files[1])
-  }
-  
-  return(boundaries)
+  return(legend_grob)
 }
 
-# Add caching function for OSM data
-cached_get_osm_data <- memoise(function(bbox) {
-  message("Fetching OSM data (cached if previously retrieved)...")
-  
-  # Only get major roads to reduce data volume
-  roads_query <- opq(bbox = bbox) %>%
-    add_osm_feature(key = "highway", 
-                   value = c("motorway", "trunk", "primary", "secondary"))
-  
-  tryCatch({
-    roads_sf <- osmdata_sf(roads_query)$osm_lines
-    return(roads_sf)
-  }, error = function(e) {
-    message("Could not fetch OSM data: ", e$message)
-    return(NULL)
-  })
-})
+# 3. Add this function to add the manual legend to any map
+add_manual_legend <- function(p) {
+  # Just return the plot without any legend
+  return(p)
+}
 
-# Fix the create_urban_map function to include Pretoria and Soweto in Gauteng map
-create_urban_map <- function(city_name, bbox, border_color = "#FF5500") {
-  message(paste("Creating", city_name, "detailed URBAN level map (REVISED VERSION)..."))
+# Create a simple FT theme function if it's missing
+create_ft_theme <- function() {
+  theme_minimal() +
+  theme(
+    text = element_text(family = "serif"),
+    plot.title = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(size = 12),
+    axis.text = element_text(size = 9),
+    axis.title = element_blank(),
+    panel.grid.major = element_line(color = "#e5e5e5", size = 0.2),
+    panel.grid.minor = element_blank(),
+    legend.position = "none"  # Remove all legends
+  )
+}
+
+# 4. MOVE SOUTHERN AFRICA MAP FURTHER LEFT
+create_regional_map <- function() {
+  message("Creating Southern Africa regional map with FT-inspired styling...")
   
-  # Define bounding box
-  xmin <- bbox[1]
-  xmax <- bbox[3]
-  ymin <- bbox[2]
-  ymax <- bbox[4]
+  # Move map even further left
+  xmin <- -5     # Decreased MORE to show more to the west
+  xmax <- 35    # Keep the same eastern boundary
+  ymin <- -35   # South enough to include Cape Town
+  ymax <- -10   # North enough to include relevant countries
   
-  message(paste("Using bbox:", paste(bbox, collapse=", ")))
+  # FILTER FOR ONLY SOUTHERN AFRICAN INSTITUTIONS
+  southern_africa_sf <- base_sf %>% 
+    filter(grepl("South Africa|Zimbabwe|Mozambique|Botswana|Namibia|Lesotho|Eswatini|Zambia|Malawi", Country))
   
-  # Get high-resolution Natural Earth data
-  countries <- ne_countries(scale = "large", returnclass = "sf")
-  states <- ne_states(country = "south africa", returnclass = "sf")
+  # Calculate primary category based on the CSV data (1 = yes, 0 = no)
+  southern_africa_sf <- southern_africa_sf %>%
+    mutate(primary_category = case_when(
+      has_policy == TRUE ~ "Policy",
+      has_engagement == TRUE ~ "Engagement, Advocacy and Capacity Building",
+      has_finance == TRUE ~ "Finance and Programmes",
+      has_research == TRUE ~ "Research",
+      TRUE ~ "Other"
+    ))
   
-  # Get cached OSM data
-  roads_sf <- cached_get_osm_data(bbox)
-  
-  # IMPORTANT CHANGE: Filter institutions for this city with special handling for gauteng region
-  city_sf <- NULL
-  if (city_name == "Johannesburg") {
-    # For Johannesburg, include Pretoria and Soweto as well
-    city_sf <- base_sf[grepl("Johannesburg|Pretoria|Soweto|Tshwane", base_data$City, ignore.case = TRUE), ]
-    message(paste("Found", nrow(city_sf), "institutions in Gauteng region"))
-    print(unique(city_sf$City))  # Print cities for debugging
-  } else {
-    # Regular filtering for other cities
-    city_name_parts <- unlist(strsplit(city_name, " & "))
-    city_matches <- sapply(city_name_parts, function(x) {
-      grepl(x, base_data$City, ignore.case = TRUE)
-    })
-    city_sf <- base_sf[rowSums(city_matches) > 0, ]
+  # Cache Natural Earth data to avoid repeated downloads
+  if (!exists("world_cached", envir = .GlobalEnv)) {
+    message("Caching Natural Earth data for faster map generation...")
+    assign("world_cached", ne_countries(scale = "medium", returnclass = "sf"), envir = .GlobalEnv)
   }
   
-  # Create a combined dataset with focus areas as explicit factors
-  all_points <- data.frame() # Empty dataframe to start
+  # Use cached data
+  world <- get("world_cached", envir = .GlobalEnv)
   
-  if(nrow(city_sf) > 0) {
-    # For each focus area, create a subset and tag it
-    policy_points <- filter(city_sf, has_policy)
-    if(nrow(policy_points) > 0) {
-      policy_points$focus_area <- "Policy"
-      all_points <- rbind(all_points, policy_points)
-    }
-    
-    research_points <- filter(city_sf, has_research)
-    if(nrow(research_points) > 0) {
-      research_points$focus_area <- "Research"
-      all_points <- rbind(all_points, research_points)
-    }
-    
-    finance_points <- filter(city_sf, has_finance)
-    if(nrow(finance_points) > 0) {
-      finance_points$focus_area <- "Finance and Programmes"
-      all_points <- rbind(all_points, finance_points)
-    }
-    
-    engagement_points <- filter(city_sf, has_engagement)
-    if(nrow(engagement_points) > 0) {
-      engagement_points$focus_area <- "Engagement, Advocacy and Capacity Building"
-      all_points <- rbind(all_points, engagement_points)
-    }
-    
-    # Set as factor if points exist
-    if(nrow(all_points) > 0) {
-      all_points$focus_area <- factor(all_points$focus_area)
-    }
-  }
-  
-  # Create the map with visible differences
+  # Create base map
   p <- ggplot() +
-    theme(panel.background = element_rect(fill = "aliceblue")) +
-    geom_sf(data = countries, fill = "antiquewhite1", color = "gray80", size = 0.2) +
-    geom_sf(data = states, fill = NA, color = "gray70", size = 0.3)
+    # Soft blue background for water
+    geom_rect(aes(xmin = -180, xmax = 180, ymin = -90, ymax = 90), 
+              fill = "#e6eef5", color = NA) +
+    # Countries
+    geom_sf(data = world, 
+            fill = "#f9f9f2", color = "#d9d9d9", size = 0.3) +
+    # Apply FT theme
+    create_ft_theme() +
+    labs(
+      title = "Southern Africa Health and Climate Network",
+      subtitle = "Showing primary focus area for each institution",
+      caption = paste0("Source: Health and Climate Network Partners Database • Generated: ", format(Sys.Date(), "%d %B %Y"))
+    )
   
-  # Add roads if available
-  if (!is.null(roads_sf)) {
-    p <- p + geom_sf(data = roads_sf, color = "gray70", size = 0.2)
-  }
+  # Add red squares for urban map regions
+  p <- p + 
+    # Cape Town square
+    annotate("rect", xmin = 18.4241 - 0.3, xmax = 18.4241 + 0.3, 
+             ymin = -33.9249 - 0.3, ymax = -33.9249 + 0.3,
+             color = "#CD1A1B", fill = NA, size = 1, alpha = 0.9) +
+    # Johannesburg/Pretoria square
+    annotate("rect", xmin = 28.0473 - 0.3, xmax = 28.0473 + 0.3, 
+             ymin = -26.2041 - 0.3, ymax = -26.2041 + 0.3,
+             color = "#CD1A1B", fill = NA, size = 1, alpha = 0.9) +
+    # Labels for the squares
+    annotate("text", x = 18.4241, y = -33.9249 - 0.7, 
+             label = "Cape Town", color = "#CD1A1B", fontface = "bold", 
+             size = 3.5, family = "serif") +
+    annotate("text", x = 28.0473, y = -26.2041 - 0.7, 
+             label = "Johannesburg/Pretoria", color = "#CD1A1B", fontface = "bold", 
+             size = 3.5, family = "serif")
   
-  # Add the institution points with explicit aesthetic mapping
-  if(nrow(all_points) > 0) {
-    p <- p +
-      geom_sf(data = all_points, 
-              aes(color = focus_area, shape = institution_type),
-              size = 3,
-              alpha = 0.9)
-  }
+  # Add points by category to ensure correct colors
+  # Policy (red) points
+  policy_points <- southern_africa_sf %>% filter(has_policy == TRUE)
+  p <- p + geom_sf(data = policy_points, 
+                  aes(shape = institution_type), 
+                  fill = POLICY_COLOR,
+                  size = 3.5, color = "black", stroke = 0.5)
   
-  # Add institution labels
-  if(nrow(city_sf) > 0) {
-    institution_labels <- st_coordinates(city_sf) %>%
-      as.data.frame() %>%
-      bind_cols(Institution = city_sf$Institution)
+  # Engagement (green) points
+  engagement_points <- southern_africa_sf %>% 
+    filter(has_policy == FALSE & has_engagement == TRUE)
+  p <- p + geom_sf(data = engagement_points, 
+                  aes(shape = institution_type), 
+                  fill = ENGAGEMENT_COLOR,
+                  size = 3.5, color = "black", stroke = 0.5)
+  
+  # Finance (tan) points
+  finance_points <- southern_africa_sf %>% 
+    filter(has_policy == FALSE & has_engagement == FALSE & has_finance == TRUE)
+  p <- p + geom_sf(data = finance_points, 
+                  aes(shape = institution_type), 
+                  fill = FINANCE_COLOR,
+                  size = 3.5, color = "black", stroke = 0.5)
+  
+  # Research (dark blue) points
+  research_points <- southern_africa_sf %>% 
+    filter(has_policy == FALSE & has_engagement == FALSE & 
+           has_finance == FALSE & has_research == TRUE)
+  p <- p + geom_sf(data = research_points, 
+                  aes(shape = institution_type), 
+                  fill = RESEARCH_COLOR,
+                  size = 3.5, color = "black", stroke = 0.5)
+  
+  # Add labels
+  p <- p + ggrepel::geom_text_repel(
+    data = southern_africa_sf,
+    aes(label = Institution, geometry = geometry),
+    stat = "sf_coordinates",
+    size = 3.5,
+    fontface = "bold",
+    family = "serif",
+    force = 25,
+    max.overlaps = 50,
+    box.padding = 0.9,
+    point.padding = 0.5,
+    segment.size = 0.4,
+    segment.color = "#505050",
+    min.segment.length = 0.1,
+    seed = 42,
+    direction = "both",
+    nudge_x = 0.2,
+    bg.color = "white",
+    bg.r = 0.15
+  )
+  
+  # Set the map extent
+  p <- p + coord_sf(xlim = c(xmin, xmax), ylim = c(ymin, ymax), expand = FALSE) +
+    ggspatial::annotation_scale(location = "br", width_hint = 0.3, 
+                               style = "ticks", text_family = "serif") +
+    ggspatial::annotation_north_arrow(
+      location = "tr", which_north = "true", 
+      style = north_arrow_fancy_orienteering(text_family = "serif"),
+      height = unit(1.2, "cm"), width = unit(1.2, "cm")
+    )
+  
+  # Apply the manual legend
+  p <- add_manual_legend(p)
+  
+  return(p)
+}
+
+# 7. APPLY SAME STYLING TO CAPE TOWN MAP
+create_simplified_urban_map <- function(city_name, bbox) {
+  message(paste("Creating", city_name, "detailed URBAN level map with FT styling..."))
+  
+  # Filter institutions for this city
+  city_sf <- base_sf %>% 
+    filter(City == city_name | 
+           (City == "Pretoria" & city_name == "Johannesburg") |
+           (City == "Soweto" & city_name == "Johannesburg"))
+  
+  # Calculate primary category
+  city_sf <- city_sf %>%
+    mutate(primary_category = case_when(
+      has_policy == TRUE ~ "Policy",
+      has_engagement == TRUE ~ "Engagement, Advocacy and Capacity Building",
+      has_finance == TRUE ~ "Finance and Programmes",
+      has_research == TRUE ~ "Research",
+      TRUE ~ "Other"
+    ))
+  
+  # Create a better styled base map
+  p <- ggplot() +
+    # Water color
+    geom_rect(aes(xmin = bbox[1], xmax = bbox[3], ymin = bbox[2], ymax = bbox[4]),
+              fill = "#e6eef5", color = NA) +
+    # Land color with subtle texture
+    geom_sf(data = st_as_sfc(st_bbox(c(xmin = bbox[1], ymin = bbox[2], 
+                                       xmax = bbox[3], ymax = bbox[4]), crs = 4326)),
+            fill = "#f9f9f2", color = NA)
+  
+  # Add city-specific features
+  if (city_name == "Cape Town") {
+    # For Cape Town, add better coastline
+    coastline <- ne_coastline(scale = "large", returnclass = "sf")
+    cape_coast <- st_crop(coastline, st_bbox(c(xmin = bbox[1]-0.1, ymin = bbox[2]-0.1, 
+                                              xmax = bbox[3]+0.1, ymax = bbox[4]+0.1), crs = 4326))
     
-    p <- p + 
-      ggrepel::geom_text_repel(
-        data = institution_labels,
-        aes(x = X, y = Y, label = Institution),
-        size = 3.5,
-        color = "black",
-        box.padding = 0.7,
-        point.padding = 0.7,
-        force = 10,
-        max.overlaps = Inf,
-        bg.color = "white",
-        bg.r = 0.15,
-        segment.size = 0.3,
-        min.segment.length = 0,
-        seed = 42
-      )
+    # Add some simplified roads for context
+    major_roads <- ne_download(scale = "large", type = "roads", category = "cultural", 
+                              returnclass = "sf")
+    
+    if (!is.null(major_roads)) {
+      cape_roads <- st_crop(major_roads, st_bbox(c(xmin = bbox[1], ymin = bbox[2], 
+                                                 xmax = bbox[3], ymax = bbox[4]), crs = 4326))
+      
+      p <- p + 
+        geom_sf(data = cape_coast, color = "#4682B4", size = 0.5) +
+        geom_sf(data = cape_roads, color = "#d9d9d9", size = 0.3, alpha = 0.7)
+    } else {
+      p <- p + geom_sf(data = cape_coast, color = "#4682B4", size = 0.5)
+    }
+    
+  } else if (city_name == "Johannesburg") {
+    # For Johannesburg, add subtle but useful base features
+    urban_areas <- ne_download(scale = "large", type = "urban_areas", category = "cultural", 
+                               returnclass = "sf")
+    
+    if (!is.null(urban_areas)) {
+      gauteng_urban <- st_crop(urban_areas, st_bbox(c(xmin = bbox[1], ymin = bbox[2], 
+                                                    xmax = bbox[3], ymax = bbox[4]), crs = 4326))
+      p <- p + geom_sf(data = gauteng_urban, fill = "#f0f0f0", color = "#d9d9d9", size = 0.2, alpha = 0.7)
+    }
+    
+    # Add major roads for context
+    major_roads <- ne_download(scale = "large", type = "roads", category = "cultural", 
+                              returnclass = "sf")
+    
+    if (!is.null(major_roads)) {
+      gauteng_roads <- st_crop(major_roads, st_bbox(c(xmin = bbox[1], ymin = bbox[2], 
+                                                    xmax = bbox[3], ymax = bbox[4]), crs = 4326))
+      p <- p + geom_sf(data = gauteng_roads, color = "#d0d0d0", size = 0.3, alpha = 0.7)
+    }
   }
   
-  # Add a timestamp and title to confirm this is a new map
-  timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
-  p <- p +
-    ggtitle(paste(city_name, "- Map created:", timestamp)) +
-    theme(plot.title = element_text(size = 10, face = "bold"))
+  # Apply FT theme
+  p <- p + create_ft_theme() +
+    labs(
+      title = paste(city_name, "Health and Climate Network"),
+      subtitle = "Showing primary focus area for each institution",
+      caption = paste0("Source: Health and Climate Network Partners Database • Generated: ", format(Sys.Date(), "%d %B %Y"))
+    )
   
-  # Add explicit scales and guides
-  p <- p +
-    scale_color_manual(
-      name = "Focus Areas",
-      values = c(
-        "Research" = "#0F1F2C",
-        "Finance and Programmes" = "#90876E",
-        "Engagement, Advocacy and Capacity Building" = "#1E4611",
-        "Policy" = "#CD1A1B"
-      )
-    ) +
+  # Add points by category to ensure correct colors
+  # Policy (red) points
+  policy_points <- city_sf %>% filter(has_policy == TRUE)
+  p <- p + geom_sf(data = policy_points, 
+                  aes(shape = institution_type), 
+                  fill = POLICY_COLOR,
+                  size = 3.5, color = "black", stroke = 0.5)
+  
+  # Engagement (green) points
+  engagement_points <- city_sf %>% 
+    filter(has_policy == FALSE & has_engagement == TRUE)
+  p <- p + geom_sf(data = engagement_points, 
+                  aes(shape = institution_type), 
+                  fill = ENGAGEMENT_COLOR,
+                  size = 3.5, color = "black", stroke = 0.5)
+  
+  # Finance (tan) points
+  finance_points <- city_sf %>% 
+    filter(has_policy == FALSE & has_engagement == FALSE & has_finance == TRUE)
+  p <- p + geom_sf(data = finance_points, 
+                  aes(shape = institution_type), 
+                  fill = FINANCE_COLOR,
+                  size = 3.5, color = "black", stroke = 0.5)
+  
+  # Research (dark blue) points
+  research_points <- city_sf %>% 
+    filter(has_policy == FALSE & has_engagement == FALSE & 
+           has_finance == FALSE & has_research == TRUE)
+  p <- p + geom_sf(data = research_points, 
+                  aes(shape = institution_type), 
+                  fill = RESEARCH_COLOR,
+                  size = 3.5, color = "black", stroke = 0.5)
+  
+  # Add labels with FT styling
+  p <- p + ggrepel::geom_text_repel(
+    data = city_sf,
+    aes(label = Institution, geometry = geometry),
+    stat = "sf_coordinates",
+    size = 3.5,
+    fontface = "bold",
+    family = "serif",
+    force = 20,
+    max.overlaps = 50,
+    box.padding = 0.9,
+    point.padding = 0.5,
+    segment.size = 0.3,
+    segment.color = "#505050",
+    min.segment.length = 0.1,
+    seed = 42,
+    direction = "both",
+    bg.color = "white",
+    bg.r = 0.15
+  )
+  
+  # Add proper legend with verified colors
+  p <- p + 
     scale_shape_manual(
       name = "Institution Type",
-      values = c("Data Provider" = 18, "Official Partner" = 16, "Other" = 15)
+      values = shape_values,
+      labels = c("Data Provider", "Official Partner", "Other")
     ) +
-    guides(
-      color = guide_legend(order = 1, override.aes = list(size = 4)),
-      shape = guide_legend(order = 2)
+    scale_fill_manual(
+      name = "Primary Focus Area",
+      values = c(
+        "Research" = RESEARCH_COLOR,
+        "Finance and Programmes" = FINANCE_COLOR,
+        "Engagement, Advocacy and Capacity Building" = ENGAGEMENT_COLOR,
+        "Policy" = POLICY_COLOR
+      ),
+      labels = c("Research", "Finance and Programmes", 
+                "Engagement, Advocacy and Capacity Building", "Policy"),
+      guide = guide_legend(override.aes = list(
+        shape = 21,
+        size = 4,
+        fill = c(RESEARCH_COLOR, FINANCE_COLOR, ENGAGEMENT_COLOR, POLICY_COLOR)
+      ))
     )
   
-  # ADD THIS EXPLICIT ZOOM LEVEL - use the bbox directly
-  p <- p + 
-    coord_sf(
-      xlim = c(xmin, xmax),
-      ylim = c(ymin, ymax),
-      expand = FALSE
-    ) +
-    # Add scale bar and north arrow
-    ggspatial::annotation_scale(
-      location = "br",
-      width_hint = 0.3,
-      style = "ticks"
-    ) +
+  # Set the map extent
+  p <- p + coord_sf(xlim = c(bbox[1], bbox[3]), ylim = c(bbox[2], bbox[4]), expand = FALSE) +
+    ggspatial::annotation_scale(location = "br", width_hint = 0.3, 
+                               style = "ticks", text_family = "serif") +
     ggspatial::annotation_north_arrow(
-      location = "tr",
-      which_north = "true",
-      style = north_arrow_minimal(),
-      height = unit(1, "cm"),
-      width = unit(1, "cm")
+      location = "tr", which_north = "true", 
+      style = north_arrow_fancy_orienteering(text_family = "serif"),
+      height = unit(1.2, "cm"), width = unit(1.2, "cm")
     )
   
   return(p)
 }
 
-# Update the bounding boxes to be exact
-cape_town_bbox <- c(18.35, -34.00, 18.50, -33.85)  # Zoomed out for Cape Town
-gauteng_bbox <- c(27.80, -26.40, 28.40, -25.60)  # Much wider view for Gauteng region
-
-# Update regional map to ensure all labels are visible
-create_regional_map <- function() {
-  message("Creating Southern Africa regional map...")
+# 8. APPLY SAME STYLING TO EUROPE MAP
+create_europe_map <- function() {
+  message("Creating Europe map with FT styling...")
   
-  # Define wider bounding box for Southern Africa
-  xmin <- -25  # Further west to accommodate new layout
-  xmax <- 50   # Further east
-  ymin <- -35  # South enough to include Cape Town
-  ymax <- 5    # North enough to include relevant countries
+  # Define Europe bounding box
+  europe_bbox <- c(-10, 35, 30, 65)
   
-  # Get base maps
+  # Filter for European institutions only
+  europe_data <- base_sf %>% 
+    filter(grepl("Austria|Belgium|Denmark|Estonia|Finland|France|Germany|Greece|Ireland|Italy|Netherlands|Norway|United Kingdom|Spain|Portugal|Sweden|Switzerland", Country))
+  
+  # Calculate primary category with correct priority
+  europe_data <- europe_data %>%
+    mutate(primary_category = case_when(
+      has_policy == TRUE ~ "Policy",
+      has_engagement == TRUE ~ "Engagement, Advocacy and Capacity Building",
+      has_finance == TRUE ~ "Finance and Programmes",
+      has_research == TRUE ~ "Research",
+      TRUE ~ "Other"
+    ))
+  
+  # Get improved base maps
   world <- ne_countries(scale = "medium", returnclass = "sf")
   
-  # Create the main plot
+  # Create the main plot with FT styling
   p <- ggplot() +
-    geom_sf(data = world, fill = "white", color = "gray80") +
-    theme_minimal() +
-    theme(
-      plot.background = element_rect(fill = "white", color = NA),
-      panel.grid.major = element_line(color = "gray90", size = 0.2),
-      plot.margin = margin(10, 30, 10, 10, "mm")
-    )
-  
-  # Add points with different shapes for data providers and others
-  p <- p + 
-    geom_sf(data = base_sf %>% filter(institution_type == "Data Provider"),
-            aes(size = focus_areas), 
-            shape = 24,  # Triangle
-            fill = "white", 
-            color = "black", 
-            stroke = 0.5) +
-    geom_sf(data = base_sf %>% filter(institution_type != "Data Provider"),
-            aes(size = focus_areas), 
-            shape = 22,  # Square
-            fill = "white", 
-            color = "black", 
-            stroke = 0.5)
-  
-  # Add category-specific points
-  for (category in names(category_colors)) {
-    category_data <- switch(category,
-      "Research" = filter(base_sf, has_research),
-      "Finance and Programmes" = filter(base_sf, has_finance),
-      "Engagement, Advocacy and Capacity Building" = filter(base_sf, has_engagement),
-      "Policy" = filter(base_sf, has_policy)
-    )
-    
-    p <- p + 
-      geom_sf(data = category_data,
-              aes(size = focus_areas),
-              shape = ifelse(category_data$institution_type == "Data Provider", 24, 22),
-              fill = category_colors[category],
-              color = "black",
-              stroke = 0.5,
-              alpha = 0.8)
-  }
-  
-  # Add labels with repel
-  p <- p + 
-    geom_text_repel(
-      data = base_sf,
-      aes(label = Institution, geometry = geometry),
-      stat = "sf_coordinates",
-      size = 2.5,
-      force = 1,
-      max.overlaps = 20,
-      box.padding = 0.5,
-      segment.color = "gray50"
-    )
-  
-  # Customize the legend
-  p <- p +
-    scale_size_continuous(
-      name = "Number of Focus Areas",
-      range = c(2, 6),
-      breaks = 1:4
-    ) +
-    guides(
-      size = guide_legend(override.aes = list(shape = 22, fill = "gray50")),
-      shape = guide_legend(title = "Institution Type")
-    )
-  
-  # Add the European inset map
-  europe_bbox <- c(-10, 35, 30, 60)
-  europe_data <- st_crop(base_sf, st_bbox(c(xmin = europe_bbox[1], ymin = europe_bbox[2],
-                                           xmax = europe_bbox[3], ymax = europe_bbox[4])))
-  
-  europe_map <- ggplot() +
-    geom_sf(data = world, fill = "white", color = "gray80") +
-    geom_sf(data = europe_data,
-            aes(size = focus_areas),
-            shape = ifelse(europe_data$institution_type == "Data Provider", 24, 22),
-            fill = "white",
-            color = "black",
-            stroke = 0.5) +
-    coord_sf(xlim = c(europe_bbox[1], europe_bbox[3]),
-            ylim = c(europe_bbox[2], europe_bbox[4])) +
-    theme_minimal() +
-    theme(
-      plot.background = element_rect(fill = "white", color = "gray50"),
-      panel.grid.major = element_line(color = "gray90", size = 0.2),
-      axis.text = element_text(size = 6),
-      plot.margin = margin(5, 5, 5, 5, "mm")
-    )
-  
-  # Add the inset map
-  p <- p +
-    annotation_custom(
-      grob = ggplotGrob(europe_map),
-      xmin = 20,  # Adjust these coordinates to position the inset
-      xmax = 45,
-      ymin = -20,
-      ymax = -5
-    ) +
-    coord_sf(xlim = c(xmin, xmax),
-            ylim = c(ymin, ymax))
-  
-  # Add title and legend
-  p <- p +
+    geom_rect(aes(xmin = -180, xmax = 180, ymin = -90, ymax = 90), 
+              fill = "#e6eef5", color = NA) +
+    geom_sf(data = world, fill = "#f9f9f2", color = "#d9d9d9", size = 0.3) +
+    create_ft_theme() +
     labs(
-      title = "Institution Network Map",
-      subtitle = "Southern Africa and European Partners",
-      caption = paste("Categories:",
-                     "\nResearch (#0F1F2C)",
-                     "\nFinance and Programmes (#90876E)",
-                     "\nEngagement, Advocacy and Capacity Building (#1E4611)",
-                     "\nPolicy (#CD1A1B)")
+      title = "European Partners - Health and Climate Network",
+      subtitle = "Showing primary focus area for each institution",
+      caption = paste0("Source: Health and Climate Network Partners Database • Generated: ", format(Sys.Date(), "%d %B %Y"))
+    )
+  
+  # Add points by category to ensure correct colors
+  # Policy (red) points
+  policy_points <- europe_data %>% filter(has_policy == TRUE)
+  p <- p + geom_sf(data = policy_points, 
+                  aes(shape = institution_type), 
+                  fill = POLICY_COLOR,
+                  size = 3.5, color = "black", stroke = 0.5)
+  
+  # Engagement (green) points
+  engagement_points <- europe_data %>% 
+    filter(has_policy == FALSE & has_engagement == TRUE)
+  p <- p + geom_sf(data = engagement_points, 
+                  aes(shape = institution_type), 
+                  fill = ENGAGEMENT_COLOR,
+                  size = 3.5, color = "black", stroke = 0.5)
+  
+  # Finance (tan) points
+  finance_points <- europe_data %>% 
+    filter(has_policy == FALSE & has_engagement == FALSE & has_finance == TRUE)
+  p <- p + geom_sf(data = finance_points, 
+                  aes(shape = institution_type), 
+                  fill = FINANCE_COLOR,
+                  size = 3.5, color = "black", stroke = 0.5)
+  
+  # Research (dark blue) points
+  research_points <- europe_data %>% 
+    filter(has_policy == FALSE & has_engagement == FALSE & 
+           has_finance == FALSE & has_research == TRUE)
+  p <- p + geom_sf(data = research_points, 
+                  aes(shape = institution_type), 
+                  fill = RESEARCH_COLOR,
+                  size = 3.5, color = "black", stroke = 0.5)
+  
+  # Add labels with FT styling
+  p <- p + ggrepel::geom_text_repel(
+    data = europe_data,
+    aes(label = Institution, geometry = geometry),
+    stat = "sf_coordinates",
+    size = 3.5,
+    fontface = "bold",
+    family = "serif",
+    force = 10,
+    max.overlaps = 30,
+    box.padding = 0.7,
+    point.padding = 0.5,
+    segment.size = 0.3,
+    segment.color = "#505050",
+    min.segment.length = 0.1,
+    seed = 42,
+    bg.color = "white",
+    bg.r = 0.15
+  )
+  
+  # Add proper legend with verified colors
+  p <- p + 
+    scale_shape_manual(
+      name = "Institution Type",
+      values = shape_values,
+      labels = c("Data Provider", "Official Partner", "Other")
+    ) +
+    scale_fill_manual(
+      name = "Primary Focus Area",
+      values = c(
+        "Research" = RESEARCH_COLOR,
+        "Finance and Programmes" = FINANCE_COLOR,
+        "Engagement, Advocacy and Capacity Building" = ENGAGEMENT_COLOR,
+        "Policy" = POLICY_COLOR
+      ),
+      labels = c("Research", "Finance and Programmes", 
+                "Engagement, Advocacy and Capacity Building", "Policy"),
+      guide = guide_legend(override.aes = list(
+        shape = 21,
+        size = 4,
+        fill = c(RESEARCH_COLOR, FINANCE_COLOR, ENGAGEMENT_COLOR, POLICY_COLOR)
+      ))
+    )
+  
+  # Set the map extent
+  p <- p + coord_sf(xlim = c(europe_bbox[1], europe_bbox[3]), 
+                   ylim = c(europe_bbox[2], europe_bbox[4]), 
+                   expand = FALSE) +
+    ggspatial::annotation_scale(location = "br", width_hint = 0.3, 
+                               style = "ticks", text_family = "serif") +
+    ggspatial::annotation_north_arrow(
+      location = "tr", which_north = "true", 
+      style = north_arrow_fancy_orienteering(text_family = "serif"),
+      height = unit(1.2, "cm"), width = unit(1.2, "cm")
     )
   
   return(p)
 }
 
-# Add this before the create_regional_map function
-# Standalone wrapper function for safe intersection that can be shared across functions
-safe_intersection <- function(x, y) {
-  tryCatch({
-    st_intersection(x, y)
-  }, error = function(e) {
-    message("Intersection error: ", e$message)
-    message("Attempting to fix invalid geometries...")
-    x_valid <- st_make_valid(x)
-    y_valid <- st_make_valid(y)
-    tryCatch({
-      st_intersection(x_valid, y_valid)
-    }, error = function(e2) {
-      message("Still failed after fixing, returning NULL")
-      return(NULL)
-    })
-  })
+# Create a combined Europe and Africa map function
+create_combined_map <- function() {
+  message("Creating combined Europe and Africa map...")
+  
+  # Define a wider view that includes both Europe and Africa
+  xmin <- -20    # West enough to include western Africa
+  xmax <- 40     # East enough to include eastern Europe and eastern Africa
+  ymin <- -40    # South enough to include South Africa
+  ymax <- 70     # North enough to include northern Europe
+  
+  # Use all institutions (no filtering by region)
+  combined_sf <- base_sf
+  
+  # Calculate primary category based on the CSV data (1 = yes, 0 = no)
+  combined_sf <- combined_sf %>%
+    mutate(primary_category = case_when(
+      has_policy == TRUE ~ "Policy",
+      has_engagement == TRUE ~ "Engagement, Advocacy and Capacity Building",
+      has_finance == TRUE ~ "Finance and Programmes",
+      has_research == TRUE ~ "Research",
+      TRUE ~ "Other"
+    ))
+  
+  # Use cached data if available
+  if (!exists("world_cached", envir = .GlobalEnv)) {
+    message("Caching Natural Earth data for faster map generation...")
+    assign("world_cached", ne_countries(scale = "medium", returnclass = "sf"), envir = .GlobalEnv)
+  }
+  
+  # Use cached data
+  world <- get("world_cached", envir = .GlobalEnv)
+  
+  # Create base map
+  p <- ggplot() +
+    # Soft blue background for water
+    geom_rect(aes(xmin = -180, xmax = 180, ymin = -90, ymax = 90), 
+              fill = "#e6eef5", color = NA) +
+    # Countries
+    geom_sf(data = world, 
+            fill = "#f9f9f2", color = "#d9d9d9", size = 0.3) +
+    # Apply theme
+    theme_minimal() +
+    theme(
+      text = element_text(family = "serif"),
+      plot.title = element_text(face = "bold", size = 14),
+      plot.subtitle = element_text(size = 12),
+      axis.text = element_text(size = 9),
+      axis.title = element_blank(),
+      panel.grid.major = element_line(color = "#e5e5e5", size = 0.2),
+      panel.grid.minor = element_blank(),
+      legend.position = "none"  # Remove all legends
+    ) +
+    labs(
+      title = "European and African Partners - Health and Climate Network",
+      subtitle = "Showing primary focus area for each institution",
+      caption = paste0("Source: Health and Climate Network Partners Database • Generated: ", 
+                      format(Sys.Date(), "%d %B %Y"))
+    ) +
+    # Set the map boundaries
+    coord_sf(xlim = c(xmin, xmax), ylim = c(ymin, ymax), expand = FALSE)
+  
+  # Add points for each category using the specified colors
+  # Research (dark blue) points
+  research_points <- combined_sf %>% filter(has_research == TRUE)
+  p <- p + geom_sf(data = research_points, 
+                  aes(shape = institution_type), 
+                  fill = RESEARCH_COLOR,
+                  size = 3.5, color = "black", stroke = 0.5)
+  
+  # Finance (tan) points
+  finance_points <- combined_sf %>% filter(has_finance == TRUE)
+  p <- p + geom_sf(data = finance_points, 
+                  aes(shape = institution_type), 
+                  fill = FINANCE_COLOR,
+                  size = 3.5, color = "black", stroke = 0.5)
+  
+  # Engagement (green) points
+  engagement_points <- combined_sf %>% filter(has_engagement == TRUE)
+  p <- p + geom_sf(data = engagement_points, 
+                  aes(shape = institution_type), 
+                  fill = ENGAGEMENT_COLOR,
+                  size = 3.5, color = "black", stroke = 0.5)
+  
+  # Policy (red) points
+  policy_points <- combined_sf %>% filter(has_policy == TRUE)
+  p <- p + geom_sf(data = policy_points, 
+                  aes(shape = institution_type), 
+                  fill = POLICY_COLOR,
+                  size = 3.5, color = "black", stroke = 0.5)
+  
+  # Add labels for major institutions
+  p <- p + geom_text_repel(
+    data = combined_sf,
+    aes(geometry = geometry, label = Institution),
+    stat = "sf_coordinates",
+    size = 2.5,
+    family = "serif",
+    force = 1,
+    max.overlaps = 15,
+    box.padding = 0.5,
+    point.padding = 0.3,
+    min.segment.length = 0,
+    segment.color = "#888888",
+    segment.size = 0.3
+  )
+  
+  # Add scale bar and north arrow
+  p <- p + 
+    annotation_scale(
+      location = "bl",
+      width_hint = 0.2,
+      style = "bar",
+      text_family = "serif",
+      text_col = "#333333",
+      bar_cols = c("#333333", "#ffffff")
+    ) +
+    annotation_north_arrow(
+      location = "tr",
+      which_north = "true",
+      height = unit(1, "cm"),
+      width = unit(1, "cm"),
+      style = north_arrow_minimal(
+        line_col = "#333333",
+        fill = c("#333333", "#ffffff"),
+        text_family = "serif"
+      )
+    )
+  
+  # Set the shape scale
+  p <- p + scale_shape_manual(values = shape_values)
+  
+  return(p)
 }
 
 # Clear the environment of existing map objects
-rm(list = c("cape_town_map", "gauteng_map", "southern_africa_map"), envir = .GlobalEnv)
+rm(list = c("cape_town_map", "gauteng_map", "southern_africa_map", "europe_map"), 
+   envir = .GlobalEnv, inherits = FALSE)
 
 # Force recreation of the maps with print statements
-message("Creating maps with VISIBLY DIFFERENT style...")
+message("Creating maps with revised style...")
 
-# Map for Cape Town
-cape_town_map <- create_urban_map("Cape Town", cape_town_bbox)
+# Map for Cape Town - SIMPLIFIED
+cape_town_map <- create_simplified_urban_map("Cape Town", cape_town_bbox)
+cape_town_map <- add_manual_legend(cape_town_map)
 print("Cape Town map created")
 
-# Map for Johannesburg
-gauteng_map <- create_urban_map("Johannesburg", gauteng_bbox)
+# Map for Johannesburg/Gauteng - SIMPLIFIED
+gauteng_map <- create_simplified_urban_map("Johannesburg", gauteng_bbox)
+gauteng_map <- add_manual_legend(gauteng_map)
 print("Johannesburg map created")
 
-# Map for Southern Africa
+# Map for Southern Africa - SOUTHERN AFRICA ONLY
 southern_africa_map <- create_regional_map()
+# Legend already added in the function
 print("Southern Africa map created")
+
+# Map for Europe - SINGLE VERSION with full institution names
+europe_map <- create_europe_map()
+europe_map <- add_manual_legend(europe_map)
+print("Europe map created")
+
+# Add this to your main code section where maps are created
+combined_map <- create_combined_map()
+print("Combined Europe and Africa map created")
 
 # Create output directory if it doesn't exist
 if (!dir.exists("output")) {
@@ -492,43 +792,30 @@ if (!dir.exists("output")) {
 # Save the maps with a timestamp to avoid caching
 timestamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
 
-# Save Cape Town map
+# Save all four maps (with the same formatting as before)
 ggsave(file.path("output", paste0("cape_town_map_", timestamp, ".pdf")), 
-       cape_town_map, 
-       width = 11, 
-       height = 9,
-       device = cairo_pdf)
-
+       cape_town_map, width = 11, height = 9, device = cairo_pdf)
 ggsave(file.path("output", paste0("cape_town_map_", timestamp, ".png")), 
-       cape_town_map, 
-       width = 11, 
-       height = 9,
-       dpi = 300)
+       cape_town_map, width = 11, height = 9, dpi = 300)
 
-# Save Johannesburg map
 ggsave(file.path("output", paste0("gauteng_map_", timestamp, ".pdf")), 
-       gauteng_map, 
-       width = 11, 
-       height = 9,
-       device = cairo_pdf)
-
+       gauteng_map, width = 11, height = 9, device = cairo_pdf)
 ggsave(file.path("output", paste0("gauteng_map_", timestamp, ".png")), 
-       gauteng_map, 
-       width = 11, 
-       height = 9,
-       dpi = 300)
+       gauteng_map, width = 11, height = 9, dpi = 300)
 
-# Save Southern Africa map
 ggsave(file.path("output", paste0("southern_africa_map_", timestamp, ".pdf")), 
-       southern_africa_map, 
-       width = 14, 
-       height = 10,
-       device = cairo_pdf)
-
+       southern_africa_map, width = 14, height = 10, device = cairo_pdf)
 ggsave(file.path("output", paste0("southern_africa_map_", timestamp, ".png")), 
-       southern_africa_map, 
-       width = 14, 
-       height = 10,
-       dpi = 300)
+       southern_africa_map, width = 14, height = 10, dpi = 300)
 
-message("Maps created and saved in output directory with timestamp: ", timestamp)
+ggsave(file.path("output", paste0("europe_map_", timestamp, ".pdf")), 
+       europe_map, width = 14, height = 10, device = cairo_pdf)
+ggsave(file.path("output", paste0("europe_map_", timestamp, ".png")), 
+       europe_map, width = 14, height = 10, dpi = 300)
+
+ggsave(file.path("output", paste0("combined_map_", timestamp, ".pdf")), 
+       combined_map, width = 14, height = 10, device = cairo_pdf)
+ggsave(file.path("output", paste0("combined_map_", timestamp, ".png")), 
+       combined_map, width = 14, height = 10, dpi = 300)
+
+message("All maps created and saved in output directory with timestamp: ", timestamp)
